@@ -1,0 +1,86 @@
+name: continuous-integration-pipeline
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  build-deploy-test-branch:
+    runs-on: ubuntu-latest
+    steps:
+
+    # Checkout the code from the triggering branch
+    - name: Checkout source code
+      uses: actions/checkout@v4
+
+    # configure aws credentials for use with Terraform
+    - name: get-aws-credentials
+      uses: aws-actions/configure-aws-credentials@v3
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-west-2
+
+    # deploy the appropriate version of terraform to the runner
+    - name: setup-terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.8.0"
+
+    # install and run TFLINT to ensure there are no terraform linting errors
+    - uses: actions/cache@v4
+      name: Cache plugin dir
+      with:
+        path: ~/.tflint.d/plugins
+        key: ubuntu-latest-tflint-${{ hashFiles('.tflint.hcl') }}
+
+    - name: Check Terraform Code formatting
+      run: terraform -chdir=terraform/web-inf fmt --recursive -check
+
+    - uses: terraform-linters/setup-tflint@v4
+      name: Setup TFLint
+      with:
+        tflint_version: v0.50.3
+
+    - name: Show version
+      run: tflint --version
+
+    - name: Init TFLint
+      run: tflint --init
+      env:
+        # https://github.com/terraform-linters/tflint/blob/master/docs/user-guide/plugins.md#avoiding-rate-limiting
+        GITHUB_TOKEN: ${{ github.token }}
+
+    - name: Run TFLint
+      run: tflint -f compact --recursive
+
+    # Run Checkov to ensure the terraform code base is up to a required standard
+    - name: Review Terraform Code with Checkov
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: terraform/web-inf
+        framework: terraform 
+        quiet: true
+        output_format: github_failed_only
+        soft_fail: true # Added this so Checkov returns an exit code of 0 so the pipeline continues to run
+
+    # Terraform Deployment
+    - name: Terraform Init
+      run: terraform -chdir=terraform/web-inf init -backend-config=../../backend_files/${{ vars.AWS_ENV }}.cfg
+
+    - name: Terraform Plan
+      run: terraform -chdir=terraform/web-inf plan
+
+    - name: Terraform Apply
+      run: terraform -chdir=terraform/web-inf apply -auto-approve
+
+    # Execute SmokeTest
+    - name: Retrieve Invoke URL and run smoketest
+      run: |
+        invoke_url=$(terraform -chdir=terraform/web-inf output invoke_url)
+        echo $invoke_url
+        ./scripts/smoketest.sh $invoke_url
+
+    # Clean up the deployed environment if all testing has succeeded
+    # May or may not be appropriate as destroying does not test terraform's incremental update.
+    - name: Terraform Destroy
+      run: terraform -chdir=terraform/web-inf destroy -auto-approve    

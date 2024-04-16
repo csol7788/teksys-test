@@ -1,0 +1,45 @@
+name: continuous-deployment-pipeline
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+
+    # Checkout the code from the triggering branch
+    - name: Checkout source code
+      uses: actions/checkout@v4
+
+    # configure aws credentials for use with Terraform
+    - name: get-aws-credentials
+      uses: aws-actions/configure-aws-credentials@v3
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-west-2
+
+    # deploy the appropriate version of terraform to the runner
+    - name: setup-terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.8.0"
+
+    # Terraform Deployment
+    - name: Terraform Init
+      run: terraform -chdir=terraform/web-inf init -backend-config=../../backend_files/${{ vars.AWS_ENV }}.cfg
+
+    - name: Terraform Plan
+      run: terraform -chdir=terraform/web-inf plan
+
+    - name: Terraform Apply
+      run: terraform -chdir=terraform/web-inf apply -auto-approve
+
+    # Execute SmokeTest
+    - name: Retrieve Invoke URL and run smoketest
+      run: |
+        invoke_url=$(terraform -chdir=terraform/web-inf output invoke_url)
+        echo $invoke_url
+        ./scripts/smoketest.sh $invoke_url
