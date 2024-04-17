@@ -29,7 +29,7 @@ jobs:
 
     # Terraform Deployment
     - name: Terraform Init
-      run: terraform -chdir=terraform/web-inf init -backend-config=../../backend_files/${{ vars.AWS_ENV }}.cfg
+      run: terraform -chdir=terraform/web-inf init -backend-config=../../backend_files/webapp-prod.cfg
 
     - name: Terraform Plan
       run: terraform -chdir=terraform/web-inf plan

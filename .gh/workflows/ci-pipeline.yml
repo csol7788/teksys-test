@@ -3,6 +3,9 @@ on:
   workflow_dispatch:
   pull_request:
 
+env:
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+
 jobs:
   build-deploy-test-branch:
     runs-on: ubuntu-latest
@@ -65,7 +68,7 @@ jobs:
 
     # Terraform Deployment
     - name: Terraform Init
-      run: terraform -chdir=terraform/web-inf init -backend-config=../../backend_files/${{ vars.AWS_ENV }}.cfg
+      run: terraform -chdir=terraform/web-inf init -backend-config=../../backend_files/webapp-feature.cfg -backend-config="key=webapp/eu-west-2/${{ env.BRANCH_NAME }}.tfstate"
 
     - name: Terraform Plan
       run: terraform -chdir=terraform/web-inf plan

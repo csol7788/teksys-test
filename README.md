@@ -27,13 +27,6 @@ The following GitHub secrets must be generated:
 - AWS_ACCESS_KEY
 - AWS_SECRET_ACCESS_KEY
 
-The following GitHub variable must be generated:
-
-- AWS_ENV
-
-The AWS Keys are used to configure AWS access on the GitHub Runner.
-The AWS_ENV is used to select the appropriate backend_file configuration. This could be replaced at a later date with a more dynamic configuration which builds the environment(s) based on the name of the branch being worked on allowing for feature branches.
-
 Pipelines:
 
 Due to the simplicity of the application I've chosen to implement the pipelines using the TRUNK Development method, essentially meaning that the application is tested significantly on feature branches prior to any code being allowed to merge into the MAIN branch. Release branches are not required and MAIN will immediately be pushed into the production environment. This method allows for small increments in code to be rolled out at a greater rate.
@@ -42,6 +35,7 @@ Due to the simplicity of the application I've chosen to implement the pipelines 
     - Testing: Terraform formatting, linting, and Checkov to ensure the code is of a set standard.
     - Terraform: performs plan, deployment and at the end of the run it will teardown the built infrastructure
     - SmokeTesting: when the API is built and running it performs a simple check to ensure the gateway is responsive.
+    - The terraform plan / apply / destroy commands execute and generate state files that are based on the branch name and thus each feature branch will build / destroy the stack independently of any other branches being developed at the same time.
 - cd-pipeline.yml: is triggered when a branch is merged into 'origin/main'
     - Terraform: performs a plan followed by a deployment to the production environment.
     - SmokeTests: These are executed again to ensure the production environment has not encountered any issues post deployment of new code.
